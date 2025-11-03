@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 # Archivo: app.py
-# Versión: 2.2.0 (Railway)
+# Versión: 2.2.0 (Render)
 
 import os
 from dotenv import load_dotenv
 from flask import Flask, render_template, session, jsonify
 from flask_session import Session
+from sqlalchemy import text
 from Log_PeakSport import log_error, log_success
 
 load_dotenv()
@@ -48,7 +49,7 @@ db.init_app(app)
 Session(app)
 
 print("\n" + "="*70)
-print("🚀 INICIALIZANDO PEAKSPORT CON RAILWAY")
+print("🚀 INICIALIZANDO PEAKSPORT EN RENDER")
 print("="*70)
 print(f"📍 Entorno: {FLASK_ENV}")
 print(f"📍 Debug: {DEBUG}")
@@ -103,7 +104,7 @@ def health_check():
     try:
         # Verificar conexión a BD
         with app.app_context():
-            result = db.session.execute("SELECT 1")
+            result = db.session.execute(text("SELECT 1"))
         
         return jsonify({
             'status': 'healthy',
@@ -125,12 +126,12 @@ def test_db_route():
     """Ruta para probar conexión a BD"""
     try:
         with app.app_context():
-            result = db.session.execute("SELECT version()")
+            result = db.session.execute(text("SELECT version()"))
             version = result.fetchone()[0]
         
         return jsonify({
             'status': 'success',
-            'message': 'Conexión a Railway exitosa',
+            'message': 'Conexión a Render exitosa',
             'version': version.split(',')[0]
         }), 200
             
@@ -187,11 +188,11 @@ def inject_config():
 
 @app.cli.command()
 def test_conexion():
-    """Comando: flask test-conexion - Prueba conexión a Railway"""
+    """Comando: flask test-conexion - Prueba conexión a Render"""
     with app.app_context():
-        print("\n🔍 Probando conexión a Railway...")
+        print("\n🔍 Probando conexión a Render...")
         try:
-            result = db.session.execute("SELECT version()")
+            result = db.session.execute(text("SELECT version()"))
             version = result.fetchone()[0]
             print(f"✅ Conexión exitosa")
             print(f"   {version.split(',')[0]}")
@@ -201,9 +202,9 @@ def test_conexion():
 
 @app.cli.command()
 def crear_tablas():
-    """Comando: flask crear-tablas - Crea todas las tablas en Railway"""
+    """Comando: flask crear-tablas - Crea todas las tablas en Render"""
     with app.app_context():
-        print("\n📦 Creando tablas en Railway...")
+        print("\n📦 Creando tablas en Render...")
         try:
             db.create_all()
             print("✅ Tablas creadas correctamente")
@@ -214,6 +215,7 @@ def crear_tablas():
 # ============================
 # INICIO DE LA APLICACIÓN
 # ============================
+
 if __name__ == '__main__':
     print("\n" + "="*70)
     print("🚀 INICIANDO PEAKSPORT")
