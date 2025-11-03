@@ -165,7 +165,15 @@ function marcarPortada(idx) {
 }
 
 function eliminarImagen(idx) {
-  mostrarModalEliminarImagen(idx);
+  imagenesCargadas.splice(idx, 1);
+  
+  // Si eliminamos la portada, marcar la primera como portada
+  if (imagenesCargadas.length > 0 && !imagenesCargadas.some(img => img.portada)) {
+    imagenesCargadas[0].portada = true;
+  }
+  
+  renderizarImagenes();
+  showNotification('Imagen eliminada', 'La imagen fue removida', 'info');
 }
 
 function manejarArchivos(e) {
@@ -203,7 +211,7 @@ function manejarArchivos(e) {
 }
 
 /* ===========================
-   Crear Producto
+   Crear Producto (CORREGIDO)
 =========================== */
 
 async function crearProducto() {
@@ -211,10 +219,10 @@ async function crearProducto() {
 
   const btnCrear = document.getElementById('btnCrear');
   btnCrear.disabled = true;
-  btnCrear.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Creando...';
+  btnCrear.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Creando producto...';
 
   try {
-    // Preparar datos
+    // 1. Preparar datos del producto
     const datos = {
       nombre: document.getElementById('inpNombre').value.trim(),
       slug: document.getElementById('inpSlug').value.trim() || null,
@@ -226,7 +234,7 @@ async function crearProducto() {
       activo: document.getElementById('chkActivo').checked
     };
 
-    // Crear producto
+    // 2. Crear producto
     const respCrear = await fetch(EP.apiCrear, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -239,6 +247,62 @@ async function crearProducto() {
       throw new Error(dataCrear.error || 'No se pudo crear el producto');
     }
 
+    const productoId = dataCrear.id;
+    console.log('✅ Producto creado con ID:', productoId);
+
+    // 3. Asociar categorías (SI HAY SELECCIONADAS)
+    if (FORM.categorias.length > 0) {
+      btnCrear.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Asociando categorías...';
+      
+      for (const categoriaId of FORM.categorias) {
+        try {
+          const respCat = await fetch(`/api/admin/productos/${productoId}/categorias`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ categoria_id: categoriaId })
+          });
+          
+          if (!respCat.ok) {
+            console.warn(`⚠️ No se pudo asociar categoría ${categoriaId}`);
+          }
+        } catch (err) {
+          console.error(`Error asociando categoría ${categoriaId}:`, err);
+        }
+      }
+      console.log('✅ Categorías asociadas');
+    }
+
+    // 4. Subir imágenes (SI HAY IMÁGENES)
+    if (imagenesCargadas.length > 0) {
+      btnCrear.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Subiendo imágenes...';
+      
+      const formData = new FormData();
+      
+      // Agregar todos los archivos
+      imagenesCargadas.forEach((img, idx) => {
+        formData.append('files', img.file);
+        formData.append('alt', img.file.name.split('.')[0]); // Usar nombre de archivo como alt
+      });
+      
+      // Marcar cuál es la portada
+      const portadaIndex = imagenesCargadas.findIndex(img => img.portada);
+      if (portadaIndex !== -1) {
+        formData.append('portada_index', portadaIndex);
+      }
+
+      const respImg = await fetch(`/api/admin/productos/${productoId}/imagenes`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!respImg.ok) {
+        console.warn('⚠️ No se pudieron subir las imágenes');
+      } else {
+        console.log('✅ Imágenes subidas');
+      }
+    }
+
+    // 5. Todo exitoso
     showNotification('¡Éxito!', 'Producto creado correctamente', 'success');
     
     setTimeout(() => {
@@ -246,9 +310,8 @@ async function crearProducto() {
     }, 1500);
 
   } catch (error) {
-    console.error('Error:', error);
+    console.error('❌ Error:', error);
     showNotification('Error', error.message, 'error');
-  } finally {
     btnCrear.disabled = false;
     btnCrear.innerHTML = '<i class="fas fa-plus mr-2"></i> Crear producto';
   }
