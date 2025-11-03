@@ -1,0 +1,29 @@
+/* Extras para categorías (apoya al base) */
+
+.search-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge-root {
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.modal-open {
+  display: flex !important;
+}
+
+.table-row:hover {
+  background-color: #f8fafc;
+}

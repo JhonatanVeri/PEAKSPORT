@@ -1,0 +1,1038 @@
+/* ===========================
+   Config
+=========================== */
+
+const EP = window.__ADMIN_ENDPOINTS__;
+const STATE = {
+  page: 1,
+  per_page: 20,
+  q: '',
+  filtroStock: 'all',
+  categoria_id: '',
+  orden: 'nombre',
+  total: 0,
+  productos: [],
+  vistaActual: 'tabla'
+};
+
+/* ===========================
+   Utils
+=========================== */
+
+function numberToCOP(cents, currency = 'COP') {
+  const amount = (cents || 0) / 100;
+  return new Intl.NumberFormat('es-CO', { style: 'currency', currency }).format(amount);
+}
+
+function showNotification(title, message, type = 'info') {
+  const n = document.getElementById('notification');
+  const icon = document.getElementById('notificationIcon');
+  const titleEl = document.getElementById('notificationTitle');
+  const messageEl = document.getElementById('notificationMessage');
+
+  const config = {
+    success: { icon: 'fas fa-check', color: 'bg-green-500' },
+    error: { icon: 'fas fa-times', color: 'bg-red-500' },
+    warning: { icon: 'fas fa-exclamation', color: 'bg-yellow-500' },
+    info: { icon: 'fas fa-info', color: 'bg-blue-500' }
+  };
+
+  const typeCfg = config[type] || config.info;
+  icon.className = `w-10 h-10 ${typeCfg.color} rounded-full flex items-center justify-center`;
+  icon.innerHTML = `<i class="${typeCfg.icon} text-white"></i>`;
+
+  titleEl.textContent = title;
+  messageEl.textContent = message;
+
+  n.classList.remove('translate-x-full');
+  setTimeout(() => n.classList.add('translate-x-full'), 3500);
+}
+
+/* ===========================
+   Render KPIs
+=========================== */
+
+function renderKPIs({ total, activos, valorTotalEstimado }) {
+  const grid = document.getElementById('kpiGrid');
+  grid.innerHTML = `
+    <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 card-hover slide-in">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-gray-600 text-sm font-medium">Total Productos</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2">${total.toLocaleString('es-CO')}</p>
+          <p class="text-green-600 text-sm mt-1"><i class="fas fa-arrow-up mr-1"></i>Datos en vivo</p>
+        </div>
+        <div class="w-16 h-16 rounded-2xl flex items-center justify-center" style="background: linear-gradient(135deg, #000000 0%, #ff0011 100%);">
+          <i class="fas fa-boxes text-white text-2xl"></i>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 card-hover slide-in">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-gray-600 text-sm font-medium">Activos</p>
+          <p class="text-3xl font-bold text-green-600 mt-2">${activos.toLocaleString('es-CO')}</p>
+          <p class="text-green-600 text-sm mt-1"><i class="fas fa-check mr-1"></i>Publicados</p>
+        </div>
+        <div class="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center">
+          <i class="fas fa-toggle-on text-white text-2xl"></i>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 card-hover slide-in">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-gray-600 text-sm font-medium">Valor Total (estimado)</p>
+          <p class="text-3xl font-bold text-green-600 mt-2">${numberToCOP(valorTotalEstimado,'COP')}</p>
+          <p class="text-green-600 text-sm mt-1"><i class="fas fa-dollar-sign mr-1"></i>Suma precios</p>
+        </div>
+        <div class="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center">
+          <i class="fas fa-dollar-sign text-white text-2xl"></i>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 card-hover slide-in">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-gray-600 text-sm font-medium">Categorías</p>
+          <p class="text-3xl font-bold text-purple-600 mt-2">—</p>
+          <p class="text-gray-500 text-sm mt-1"><i class="fas fa-tags mr-1"></i>Activas</p>
+        </div>
+        <div class="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center">
+          <i class="fas fa-tags text-white text-2xl"></i>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* ===========================
+   Render Table/Cards
+=========================== */
+
+function renderTable(items, page, perPage, total) {
+  const container = document.getElementById('productsTableBody').parentElement.parentElement.parentElement;
+  
+  if (STATE.vistaActual === 'tabla') {
+    const tbody = document.getElementById('productsTableBody');
+    tbody.innerHTML = items.map(p => {
+      const estadoBadge = p.activo
+        ? `<span class="status-badge status-in-stock"><i class="fas fa-check-circle mr-1"></i>Activo</span>`
+        : `<span class="status-badge status-out-stock"><i class="fas fa-times-circle mr-1"></i>Inactivo</span>`;
+
+      const precio = numberToCOP(p.precio_centavos, p.moneda || 'COP');
+      
+      const imagenProducto = p.imagenes && p.imagenes.length > 0
+      ? p.imagenes.find(img => img.es_portada) || p.imagenes[0]
+      : (p.image ? { url: p.image } : null);
+
+
+      // Construir URL completa si solo tiene el nombre del archivo
+      const getImageUrl = (url) => {
+        if (!url) return null;
+        // Si ya es una URL completa (empieza con http o /), usarla tal cual
+        if (url.startsWith('http') || url.startsWith('/')) return url;
+        // Si no, construir la ruta desde static/uploads
+        return `/static/uploads/${url}`;
+      };
+
+      return `
+        <tr class="table-row">
+          <td class="px-6 py-4 whitespace-nowrap">
+            <input type="checkbox" class="rounded border-gray-300">
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <div class="flex items-center space-x-4">
+              <div class="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center flex-shrink-0">
+                ${imagenProducto 
+                  ? `<img src="${getImageUrl(imagenProducto.url)}" alt="${p.nombre}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<i class=\\'fas fa-image text-gray-400\\'></i>'">`
+                  : `<i class="fas fa-image text-gray-400"></i>`
+                }
+              </div>
+              <div>
+                <p class="text-sm font-medium text-gray-900">${p.nombre ?? ''}</p>
+                <p class="text-xs text-gray-500">ID: ${p.id}</p>
+              </div>
+            </div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">${p.slug ?? ''}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${precio}</td>
+          <td class="px-6 py-4 whitespace-nowrap">${estadoBadge}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+            <div class="flex items-center space-x-2">
+              <button data-id="${p.id}" class="btn-edit text-blue-600 hover:text-blue-900 p-2 hover:bg-blue-50 rounded-lg transition-all" title="Editar">
+                <i class="fas fa-edit"></i>
+              </button>
+              <button data-id="${p.id}" class="btn-view text-green-600 hover:text-green-900 p-2 hover:bg-green-50 rounded-lg transition-all" title="Ver detalles">
+                <i class="fas fa-eye"></i>
+              </button>
+              <button data-id="${p.id}" data-nombre="${(p.nombre || '').replace(/"/g, '&quot;')}" data-slug="${p.slug ?? ''}" data-precio="${precio}" class="btn-delete text-red-600 hover:text-red-900 p-2 hover:bg-red-50 rounded-lg transition-all" title="Eliminar">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } else {
+    const cardsContainer = document.createElement('div');
+    cardsContainer.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-6';
+    cardsContainer.id = 'cardsContainer';
+    
+    cardsContainer.innerHTML = items.map(p => {
+      const estadoBadge = p.activo
+        ? `<span class="status-badge status-in-stock"><i class="fas fa-check-circle mr-1"></i>Activo</span>`
+        : `<span class="status-badge status-out-stock"><i class="fas fa-times-circle mr-1"></i>Inactivo</span>`;
+
+      const precio = numberToCOP(p.precio_centavos, p.moneda || 'COP');
+      
+      const imagenProducto = p.imagenes && p.imagenes.length > 0 
+        ? p.imagenes.find(img => img.es_portada) || p.imagenes[0]
+        : null;
+
+      return `
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden card-hover transition-all">
+          <div class="h-48 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center relative overflow-hidden">
+            ${imagenProducto 
+              ? `<img src="${imagenProducto.url}" alt="${p.nombre}" class="w-full h-full object-cover">`
+              : `<i class="fas fa-box text-gray-400 text-5xl"></i>`
+            }
+            <div class="absolute top-3 right-3">${estadoBadge}</div>
+          </div>
+          <div class="p-5">
+            <h3 class="font-bold text-gray-900 text-lg mb-1 truncate" title="${p.nombre}">${p.nombre ?? 'Sin nombre'}</h3>
+            <p class="text-xs text-gray-500 mb-3 font-mono truncate">${p.slug ?? '-'}</p>
+            <div class="flex items-center justify-between mb-4">
+              <span class="text-2xl font-bold text-green-600">${precio}</span>
+              <span class="text-xs text-gray-500">ID: ${p.id}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button data-id="${p.id}" class="btn-edit flex-1 px-3 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-all text-sm font-medium" title="Editar">
+                <i class="fas fa-edit"></i>
+              </button>
+              <button data-id="${p.id}" class="btn-view flex-1 px-3 py-2 bg-green-50 text-green-600 hover:bg-green-100 rounded-lg transition-all text-sm font-medium" title="Ver">
+                <i class="fas fa-eye"></i>
+              </button>
+              <button data-id="${p.id}" data-nombre="${(p.nombre || '').replace(/"/g, '&quot;')}" data-slug="${p.slug ?? ''}" data-precio="${precio}" class="btn-delete flex-1 px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-all text-sm font-medium" title="Eliminar">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    const tableContainer = container.querySelector('.overflow-x-auto');
+    if (tableContainer) {
+      tableContainer.style.display = 'none';
+      let existingCards = container.querySelector('#cardsContainer');
+      if (existingCards) {
+        existingCards.replaceWith(cardsContainer);
+      } else {
+        tableContainer.insertAdjacentElement('afterend', cardsContainer);
+      }
+    }
+  }
+
+  if (STATE.vistaActual === 'tabla') {
+    const tableContainer = container.querySelector('.overflow-x-auto');
+    if (tableContainer) {
+      tableContainer.style.display = 'block';
+      const existingCards = container.querySelector('#cardsContainer');
+      if (existingCards) existingCards.remove();
+    }
+  }
+
+  const lbl = document.getElementById('lblResumen');
+  const start = total === 0 ? 0 : ((page - 1) * perPage) + 1;
+  const end = Math.min(page * perPage, total);
+  lbl.textContent = `Mostrando ${start} a ${end} de ${total} productos`;
+
+  renderPagination(page, perPage, total);
+  bindRowActions();
+}
+
+function renderPagination(page, perPage, total) {
+  const container = document.getElementById('paginacion');
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+
+  const btn = (label, pageNum, active=false, disabled=false) => `
+    <button data-page="${pageNum}"
+            class="px-3 py-2 text-sm ${active ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-all'}"
+            ${disabled ? 'disabled' : ''}>
+      ${label}
+    </button>`;
+
+  let html = '';
+  html += btn('Anterior', Math.max(1, page - 1), false, page === 1);
+
+  for (let i = 1; i <= Math.min(totalPages, 3); i++) {
+    html += btn(String(i), i, page === i);
+  }
+
+  if (totalPages > 3) {
+    html += `<span class="text-gray-400 px-2">...</span>`;
+    html += btn(String(totalPages), totalPages, page === totalPages);
+  }
+
+  html += btn('Siguiente', Math.min(totalPages, page + 1), false, page === totalPages);
+
+  container.innerHTML = html;
+
+  container.querySelectorAll('button[data-page]').forEach(b => {
+    b.addEventListener('click', (e) => {
+      const nextPage = parseInt(e.currentTarget.getAttribute('data-page'), 10);
+      if (nextPage && nextPage !== STATE.page) {
+        STATE.page = nextPage;
+        loadProducts();
+      }
+    });
+  });
+}
+
+/* ===========================
+   Load Products
+=========================== */
+
+async function loadProducts() {
+  try {
+    const params = new URLSearchParams();
+    if (STATE.q) params.set('q', STATE.q);
+    if (STATE.categoria_id) params.set('categoria_id', STATE.categoria_id);
+    params.set('page', STATE.page);
+    params.set('per_page', STATE.per_page);
+
+    const url = `${EP.apiListar}?${params.toString()}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('Error al cargar productos');
+    const data = await resp.json();
+
+    const items = data.items || [];
+    STATE.total = data.total || 0;
+
+    const activos = items.filter(p => p.activo).length;
+    const valorTotalEstimado = items.reduce((acc, p) => acc + (p.precio_centavos || 0), 0);
+    renderKPIs({ total: STATE.total, activos, valorTotalEstimado });
+
+    let sorted = [...items];
+    if (STATE.orden === 'nombre') sorted.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+    if (STATE.orden === 'precio') sorted.sort((a,b) => (a.precio_centavos||0) - (b.precio_centavos||0));
+    if (STATE.orden === 'fecha') sorted.sort((a,b) => new Date(b.created_at||0) - new Date(a.created_at||0));
+
+    if (STATE.filtroStock !== 'all') {
+      if (STATE.filtroStock === 'in-stock') sorted = sorted.filter(p => p.activo);
+      if (STATE.filtroStock === 'out-stock') sorted = sorted.filter(p => !p.activo);
+    }
+
+    renderTable(sorted, STATE.page, STATE.per_page, STATE.total);
+    STATE.productos = sorted;
+  } catch (e) {
+    console.error(e);
+    showNotification('Error', 'No se pudo cargar el listado', 'error');
+  }
+}
+
+function bindRowActions() {
+  document.querySelectorAll('.btn-edit').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.currentTarget.getAttribute('data-id');
+      const editarUrl = EP.vistaEditarTemplate.replace(/\/0\/editar$/, `/${id}/editar`);
+      window.location.href = editarUrl;
+    });
+  });
+  
+  document.querySelectorAll('.btn-view').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = parseInt(e.currentTarget.getAttribute('data-id'), 10);
+      const producto = STATE.productos.find(p => p.id === id);
+      
+      if (producto) {
+        mostrarModalDetalles(producto);
+      } else {
+        showNotification('Error', 'Producto no encontrado', 'error');
+      }
+    });
+  });
+  
+  document.querySelectorAll('.btn-delete').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.currentTarget.getAttribute('data-id');
+      const nombre = e.currentTarget.getAttribute('data-nombre');
+      const slug = e.currentTarget.getAttribute('data-slug');
+      const precio = e.currentTarget.getAttribute('data-precio');
+      
+      mostrarModalEliminar(id, nombre, slug, precio);
+    });
+  });
+}
+
+/* ===========================
+   Export PDF
+=========================== */
+
+async function exportarPDF() {
+  try {
+    showNotification('Exportando', 'Generando PDF...', 'info');
+    
+    // Crear iframe para genera el PDF
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+    
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+    
+    // Obtener info del administrador (puedes ajustar según tu sistema)
+    const adminInfo = {
+      nombre: 'PeakSport - Gestión de Almacén',
+      empresa: 'PeakSport Colombia',
+      direccion: 'Bogotá, D.C.',
+      telefono: '+57 (1) XXXX-XXXX',
+      email: 'admin@peaksport.com',
+      fecha: new Date().toLocaleDateString('es-CO', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      })
+    };
+    
+    // Consolidar datos de productos
+    const consolidado = {
+      totalProductos: STATE.total,
+      productosActivos: STATE.productos.filter(p => p.activo).length,
+      productosInactivos: STATE.productos.filter(p => !p.activo).length,
+      valorTotal: STATE.productos.reduce((acc, p) => acc + (p.precio_centavos || 0), 0),
+      productos: STATE.productos
+    };
+    
+    // HTML del PDF
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Reporte de Inventario - PeakSport</title>
+        <style>
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+          
+          body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #333;
+            line-height: 1.6;
+            background: white;
+          }
+          
+          .page {
+            width: 210mm;
+            height: 297mm;
+            margin: 0 auto;
+            padding: 20mm;
+            background: white;
+          }
+          
+          /* MEMBRETE */
+          .membrete {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 3px solid #000;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+          }
+          
+          .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+          }
+          
+          .logo {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #000000 0%, #ff0011 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+          }
+          
+          .empresa-info h1 {
+            font-size: 20px;
+            color: #000;
+            margin-bottom: 3px;
+          }
+          
+          .empresa-info p {
+            font-size: 11px;
+            color: #666;
+            margin: 2px 0;
+          }
+          
+          .fecha-section {
+            text-align: right;
+          }
+          
+          .fecha-section p {
+            font-size: 11px;
+            color: #666;
+          }
+          
+          .fecha-section .fecha {
+            font-size: 13px;
+            font-weight: bold;
+            color: #000;
+            margin-top: 5px;
+          }
+          
+          /* TÍTULOS */
+          h2 {
+            font-size: 16px;
+            color: #000;
+            margin-top: 25px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #ff0011;
+          }
+          
+          /* KPIs */
+          .kpis-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+          }
+          
+          .kpi-box {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 12px;
+            text-align: center;
+          }
+          
+          .kpi-box label {
+            font-size: 10px;
+            color: #666;
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+          }
+          
+          .kpi-box .valor {
+            font-size: 18px;
+            font-weight: bold;
+            color: #000;
+          }
+          
+          .kpi-box.green {
+            background: #e8f5e9;
+            border-color: #4caf50;
+          }
+          
+          .kpi-box.green .valor {
+            color: #2e7d32;
+          }
+          
+          .kpi-box.red {
+            background: #ffebee;
+            border-color: #f44336;
+          }
+          
+          .kpi-box.red .valor {
+            color: #c62828;
+          }
+          
+          /* TABLA */
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 10px;
+          }
+          
+          thead {
+            background: linear-gradient(135deg, #000000 0%, #ff0011 100%);
+            color: white;
+          }
+          
+          th {
+            padding: 10px;
+            text-align: left;
+            font-weight: bold;
+            border: 1px solid #ddd;
+          }
+          
+          td {
+            padding: 8px;
+            border: 1px solid #ddd;
+          }
+          
+          tbody tr:nth-child(even) {
+            background: #f9f9f9;
+          }
+          
+          tbody tr:hover {
+            background: #f0f0f0;
+          }
+          
+          .status-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 9px;
+            font-weight: bold;
+          }
+          
+          .status-activo {
+            background: #d4edda;
+            color: #155724;
+          }
+          
+          .status-inactivo {
+            background: #f8d7da;
+            color: #721c24;
+          }
+          
+          .precio {
+            font-weight: bold;
+            color: #2e7d32;
+            text-align: right;
+            font-family: 'Courier New', monospace;
+          }
+          
+          /* FOOTER */
+          .footer {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+            text-align: center;
+            font-size: 9px;
+            color: #999;
+          }
+          
+          .footer p {
+            margin: 3px 0;
+          }
+          
+          /* PÁGINA BREAK */
+          @media print {
+            body { margin: 0; padding: 0; }
+            .page { page-break-after: always; }
+          }
+        </style>
+      </head>
+      <body>
+        <!-- PÁGINA 1: MEMBRETE Y CONSOLIDADO -->
+        <div class="page">
+          <!-- MEMBRETE -->
+          <div class="membrete">
+            <div class="logo-section">
+              <div class="logo">🏔️</div>
+              <div class="empresa-info">
+                <h1>${adminInfo.empresa}</h1>
+                <p>${adminInfo.direccion}</p>
+                <p>${adminInfo.telefono} • ${adminInfo.email}</p>
+              </div>
+            </div>
+            <div class="fecha-section">
+              <p>Reporte de Inventario</p>
+              <div class="fecha">${adminInfo.fecha}</div>
+            </div>
+          </div>
+          
+          <!-- TÍTULO -->
+          <h2>📊 Consolidado de Productos</h2>
+          
+          <!-- KPIs -->
+          <div class="kpis-container">
+            <div class="kpi-box">
+              <label>Total Productos</label>
+              <div class="valor">${consolidado.totalProductos.toLocaleString('es-CO')}</div>
+            </div>
+            <div class="kpi-box green">
+              <label>Activos</label>
+              <div class="valor">${consolidado.productosActivos.toLocaleString('es-CO')}</div>
+            </div>
+            <div class="kpi-box red">
+              <label>Inactivos</label>
+              <div class="valor">${consolidado.productosInactivos.toLocaleString('es-CO')}</div>
+            </div>
+            <div class="kpi-box green">
+              <label>Valor Total</label>
+              <div class="valor">${numberToCOP(consolidado.valorTotal, 'COP')}</div>
+            </div>
+          </div>
+          
+          <!-- TABLA DE PRODUCTOS -->
+          <h2>📦 Detalle de Productos</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Slug</th>
+                <th>Precio</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${consolidado.productos.map(p => `
+                <tr>
+                  <td>${p.id}</td>
+                  <td>${p.nombre || '-'}</td>
+                  <td><small>${p.slug || '-'}</small></td>
+                  <td class="precio">${numberToCOP(p.precio_centavos, p.moneda || 'COP')}</td>
+                  <td>
+                    <span class="status-badge ${p.activo ? 'status-activo' : 'status-inactivo'}">
+                      ${p.activo ? '✓ Activo' : '✗ Inactivo'}
+                    </span>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          
+          <!-- FOOTER -->
+          <div class="footer">
+            <p>📄 Este documento fue generado automáticamente por el sistema de gestión de PeakSport</p>
+            <p>© ${new Date().getFullYear()} PeakSport. Todos los derechos reservados.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    // Escribir contenido en el iframe
+    iframeDoc.open();
+    iframeDoc.write(htmlContent);
+    iframeDoc.close();
+    
+    // Esperar a que cargue y luego imprimir
+    setTimeout(() => {
+      iframe.contentWindow.print();
+      
+      // Limpiar después de 1 segundo
+      setTimeout(() => {
+        document.body.removeChild(iframe);
+        showNotification('PDF listo', 'El PDF se ha generado correctamente', 'success');
+      }, 1000);
+    }, 500);
+    
+  } catch (error) {
+    console.error('Error al exportar PDF:', error);
+    showNotification('Error', 'No se pudo generar el PDF', 'error');
+  }
+}
+
+// Hacer función global
+window.exportarPDF = exportarPDF;
+
+/* ===========================
+   Actualizar btnExport
+=========================== */
+
+// Reemplaza en initFilters() la sección del btnExport:
+
+const btnExport = document.getElementById('btnExport');
+btnExport.addEventListener('click', exportarPDF);
+
+/* ===========================
+   Modal Detalles
+=========================== */
+
+function mostrarModalDetalles(producto) {
+  const modal = document.getElementById("modalDetalles");
+  const modalContent = modal.querySelector(".modal-content");
+
+  // Seleccionar solo la imagen de portada (si no hay, usar placeholder)
+const imagenProducto = producto.imagenes && producto.imagenes.length > 0
+  ? producto.imagenes.find(img => img.es_portada) || producto.imagenes[0]
+  : (producto.image ? { url: producto.image } : null);
+
+
+  // Construir el HTML del modal
+  const html = `
+    <div class="flex flex-col md:flex-row items-center md:items-start gap-8">
+      ${imagenProducto
+        ? `<div class="w-64 h-64 rounded-2xl overflow-hidden shadow-lg">
+             <img src="${imagenProducto.url}"
+                  alt="${imagenProducto.alt || producto.nombre}"
+                  class="w-full h-full object-cover">
+           </div>`
+        : `<div class="w-32 h-32 bg-gradient-to-br from-purple-500 to-blue-600 rounded-2xl flex items-center justify-center">
+             <i class="fas fa-box text-white text-5xl"></i>
+           </div>`
+      }
+
+      <div class="flex-1">
+        <h2 class="text-2xl font-bold mb-2">${producto.nombre}</h2>
+        <p class="text-gray-600 mb-4">${producto.descripcion || 'Sin descripción disponible.'}</p>
+        <div class="text-xl font-semibold text-purple-600 mb-4">
+          $${(producto.precio_centavos / 100).toLocaleString('es-CO')} ${producto.moneda || 'COP'}
+        </div>
+        <p class="text-sm text-gray-500 mb-2">Slug: ${producto.slug}</p>
+        <p class="text-sm ${producto.activo ? 'text-green-600' : 'text-red-600'} font-medium">
+          ${producto.activo ? 'Activo' : 'Inactivo'}
+        </p>
+      </div>
+    </div>
+
+    <div class="mt-8 flex justify-end">
+      <button id="btnCerrarModalDetalles"
+              class="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium transition-all">
+        Cerrar
+      </button>
+    </div>
+  `;
+
+  modalContent.innerHTML = html;
+  modal.style.display = "flex";
+
+  // Evento para cerrar modal
+  document.getElementById("btnCerrarModalDetalles").addEventListener("click", () => {
+    modal.style.display = "none";
+  });
+}
+
+
+function cerrarModalDetalles() {
+  const modal = document.getElementById('modalDetalles');
+  modal.classList.add('hidden');
+  modal.style.display = 'none';
+}
+
+window.cerrarModalDetalles = cerrarModalDetalles;
+
+/* ===========================
+   Modal Eliminar
+=========================== */
+
+function mostrarModalEliminar(id, nombre, slug, precio) {
+  const modal = document.getElementById('modalEliminar');
+  const content = modal.querySelector('.modal-content');
+  
+  content.innerHTML = `
+    <div class="text-center mb-6">
+      <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 pulse-danger">
+        <i class="fas fa-trash text-red-600 text-2xl"></i>
+      </div>
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">Eliminar este producto</h2>
+      <p class="text-gray-600">¿Estás seguro de que quieres eliminar este producto del inventario?</p>
+    </div>
+
+    <div class="bg-gray-50 rounded-xl p-4 mb-6">
+      <div class="flex items-center space-x-4">
+        <div class="w-16 h-16 bg-gradient-to-br from-red-600 to-black rounded-lg flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-box text-white text-2xl"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <h3 class="font-semibold text-gray-900 truncate">${nombre}</h3>
+          <p class="text-sm text-gray-600 mt-1">SKU: ${slug}</p>
+          <p class="text-sm font-medium text-gray-900 mt-1">${precio}</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+      <div class="flex items-start">
+        <i class="fas fa-exclamation-triangle text-red-500 mr-3 mt-0.5"></i>
+        <div class="text-sm">
+          <p class="text-red-800 font-medium">Esta acción no se puede deshacer</p>
+          <p class="text-red-700 mt-1">El producto será eliminado permanentemente del inventario junto con todas sus imágenes.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex space-x-4">
+      <button onclick="cerrarModalEliminar()" 
+              class="flex-1 px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all font-medium">
+        <i class="fas fa-times mr-2"></i> Cancelar
+      </button>
+      <button onclick="confirmarEliminar(${id})" 
+              class="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all font-medium shadow-lg">
+        <i class="fas fa-check mr-2"></i> Confirmar
+      </button>
+    </div>
+  `;
+  
+  modal.classList.remove('hidden');
+  modal.style.display = 'flex';
+}
+
+function cerrarModalEliminar() {
+  const modal = document.getElementById('modalEliminar');
+  modal.classList.add('hidden');
+  modal.style.display = 'none';
+}
+
+async function confirmarEliminar(id) {
+  const modal = document.getElementById('modalEliminar');
+  const btnConfirmar = modal.querySelector('button[onclick^="confirmarEliminar"]');
+  
+  btnConfirmar.disabled = true;
+  btnConfirmar.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Eliminando...';
+  
+  try {
+    const eliminarUrl = EP.apiEliminarTemplate.replace('/0', `/${id}`);
+    const response = await fetch(eliminarUrl, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'No fue posible eliminar el producto');
+    }
+    
+    showNotification('Producto eliminado', 'El producto ha sido eliminado del inventario', 'success');
+    cerrarModalEliminar();
+    
+    setTimeout(() => {
+      loadProducts();
+    }, 800);
+    
+  } catch (error) {
+    console.error('Error al eliminar:', error);
+    showNotification('Error', error.message, 'error');
+    btnConfirmar.disabled = false;
+    btnConfirmar.innerHTML = '<i class="fas fa-check mr-2"></i> Confirmar';
+  }
+}
+
+window.cerrarModalEliminar = cerrarModalEliminar;
+window.confirmarEliminar = confirmarEliminar;
+
+/* ===========================
+   UI Handlers
+=========================== */
+
+function setActiveFilter(targetBtn) {
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.classList.remove('filter-active');
+    btn.classList.add('text-gray-600', 'hover:bg-gray-100');
+  });
+  targetBtn.classList.add('filter-active');
+  targetBtn.classList.remove('text-gray-600', 'hover:bg-gray-100');
+}
+
+function initFilters() {
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      const filter = ev.currentTarget.getAttribute('data-filter') || 'all';
+      STATE.filtroStock = filter;
+      setActiveFilter(ev.currentTarget);
+      showNotification('Filtro aplicado', `Mostrando: ${filter}`, 'info');
+      loadProducts();
+    });
+  });
+
+  const txt = document.getElementById('txtSearch');
+  let t;
+  txt.addEventListener('input', () => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      STATE.q = txt.value.trim();
+      STATE.page = 1;
+      loadProducts();
+    }, 300);
+  });
+
+  const selOrden = document.getElementById('selOrden');
+  selOrden.addEventListener('change', (e) => {
+    STATE.orden = e.target.value;
+    loadProducts();
+  });
+
+  const selCat = document.getElementById('selCategoria');
+  selCat.addEventListener('change', (e) => {
+    STATE.categoria_id = e.target.value;
+    STATE.page = 1;
+    loadProducts();
+  });
+
+  const btnExport = document.getElementById('btnExport');
+  btnExport.addEventListener('click', () => {
+    showNotification('Exportando', 'Generando archivo...', 'info');
+    setTimeout(() => showNotification('Listo', 'Archivo exportado', 'success'), 1200);
+  });
+
+  const btnToggle = document.getElementById('btnToggleView');
+  btnToggle.addEventListener('click', () => {
+    STATE.vistaActual = STATE.vistaActual === 'tabla' ? 'cards' : 'tabla';
+    
+    const icon = STATE.vistaActual === 'tabla' 
+      ? '<i class="fas fa-th-large mr-2"></i>' 
+      : '<i class="fas fa-table mr-2"></i>';
+    const texto = STATE.vistaActual === 'tabla' ? 'Vista' : 'Tabla';
+    
+    btnToggle.innerHTML = `${icon} ${texto}`;
+    
+    const sorted = [...STATE.productos];
+    if (STATE.orden === 'nombre') sorted.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+    if (STATE.orden === 'precio') sorted.sort((a,b) => (a.precio_centavos||0) - (b.precio_centavos||0));
+    if (STATE.orden === 'fecha') sorted.sort((a,b) => new Date(b.created_at||0) - new Date(a.created_at||0));
+
+    if (STATE.filtroStock !== 'all') {
+      if (STATE.filtroStock === 'in-stock') sorted = sorted.filter(p => p.activo);
+      if (STATE.filtroStock === 'out-stock') sorted = sorted.filter(p => !p.activo);
+    }
+    
+    renderTable(sorted, STATE.page, STATE.per_page, STATE.total);
+    
+    showNotification(
+      'Vista cambiada', 
+      `Mostrando vista de ${STATE.vistaActual === 'tabla' ? 'tabla' : 'tarjetas'}`, 
+      'info'
+    );
+  });
+}
+
+/* ===========================
+   Boot
+=========================== */
+
+document.addEventListener('DOMContentLoaded', () => {
+  initFilters();
+  loadProducts();
+  showNotification('Sistema cargado', 'Gestión de almacén lista para usar', 'success');
+  
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const modalEliminar = document.getElementById('modalEliminar');
+      const modalDetalles = document.getElementById('modalDetalles');
+      
+      if (modalEliminar.style.display === 'flex') {
+        cerrarModalEliminar();
+      }
+      if (modalDetalles.style.display === 'flex') {
+        cerrarModalDetalles();
+      }
+    }
+  });
+  
+  const modalEliminar = document.getElementById('modalEliminar');
+  modalEliminar.addEventListener('click', (e) => {
+    if (e.target === modalEliminar) {
+      cerrarModalEliminar();
+    }
+  });
+
+  const modalDetalles = document.getElementById('modalDetalles');
+  modalDetalles.addEventListener('click', (e) => {
+    if (e.target === modalDetalles) {
+      cerrarModalDetalles();
+    }
+  });
+});
