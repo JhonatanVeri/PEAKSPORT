@@ -230,8 +230,19 @@
 
   <!-- Modal Container para detalles -->
   <div id="modalDetalles" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-[9999] hidden items-center justify-center p-4" style="display: none;">
-    <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 modal-content max-h-[90vh] overflow-y-auto">
-      <!-- El contenido se cargará aquí dinámicamente -->
+    <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <!-- Header -->
+      <div class="sticky top-0 bg-gradient-to-r from-red-500 to-red-600 px-6 py-4 flex items-center justify-between">
+        <h2 class="text-2xl font-bold text-white">Detalles del Producto</h2>
+        <button onclick="cerrarModalDetalles()" class="text-white hover:bg-white/20 p-2 rounded-lg transition">
+          <i class="fas fa-times text-2xl"></i>
+        </button>
+      </div>
+
+      <!-- Contenido -->
+      <div class="p-6 modal-content">
+        <!-- El contenido se cargará aquí dinámicamente -->
+      </div>
     </div>
   </div>
 

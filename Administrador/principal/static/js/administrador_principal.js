@@ -755,53 +755,95 @@ function mostrarModalDetalles(producto) {
   const modal = document.getElementById("modalDetalles");
   const modalContent = modal.querySelector(".modal-content");
 
-  // Seleccionar solo la imagen de portada (si no hay, usar placeholder)
-const imagenProducto = producto.imagenes && producto.imagenes.length > 0
-  ? producto.imagenes.find(img => img.es_portada) || producto.imagenes[0]
-  : (producto.image ? { url: producto.image } : null);
+  const imagenProducto = producto.imagenes && producto.imagenes.length > 0
+    ? producto.imagenes.find(img => img.es_portada) || producto.imagenes[0]
+    : (producto.image ? { url: producto.image } : null);
 
-
-  // Construir el HTML del modal
   const html = `
-    <div class="flex flex-col md:flex-row items-center md:items-start gap-8">
-      ${imagenProducto
-        ? `<div class="w-64 h-64 rounded-2xl overflow-hidden shadow-lg">
-             <img src="${imagenProducto.url}"
-                  alt="${imagenProducto.alt || producto.nombre}"
-                  class="w-full h-full object-cover">
-           </div>`
-        : `<div class="w-32 h-32 bg-gradient-to-br from-purple-500 to-blue-600 rounded-2xl flex items-center justify-center">
-             <i class="fas fa-box text-white text-5xl"></i>
-           </div>`
-      }
-
-      <div class="flex-1">
-        <h2 class="text-2xl font-bold mb-2">${producto.nombre}</h2>
-        <p class="text-gray-600 mb-4">${producto.descripcion || 'Sin descripción disponible.'}</p>
-        <div class="text-xl font-semibold text-purple-600 mb-4">
-          $${(producto.precio_centavos / 100).toLocaleString('es-CO')} ${producto.moneda || 'COP'}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <!-- Imagen -->
+      <div>
+        <div class="relative rounded-xl overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 aspect-square mb-4">
+          ${imagenProducto
+            ? `<img src="${imagenProducto.url}" alt="${imagenProducto.alt || producto.nombre}" class="w-full h-full object-cover">`
+            : `<div class="w-full h-full flex items-center justify-center"><i class="fas fa-box text-gray-400 text-6xl"></i></div>`
+          }
+          <div class="absolute top-3 right-3 flex gap-2">
+            <button class="p-3 rounded-full backdrop-blur-md bg-white/20 text-white hover:bg-white/30 transition">
+              <i class="fas fa-heart text-lg"></i>
+            </button>
+            <button class="p-3 rounded-full backdrop-blur-md bg-white/20 text-white hover:bg-white/30 transition">
+              <i class="fas fa-share-alt text-lg"></i>
+            </button>
+          </div>
+          <div class="absolute bottom-3 left-3">
+            <span class="bg-green-500 text-white px-4 py-2 rounded-full text-sm font-semibold">
+              <i class="fas fa-box mr-1"></i> ${producto.activo ? 'En Stock' : 'Agotado'}
+            </span>
+          </div>
         </div>
-        <p class="text-sm text-gray-500 mb-2">Slug: ${producto.slug}</p>
-        <p class="text-sm ${producto.activo ? 'text-green-600' : 'text-red-600'} font-medium">
-          ${producto.activo ? 'Activo' : 'Inactivo'}
-        </p>
       </div>
-    </div>
 
-    <div class="mt-8 flex justify-end">
-      <button id="btnCerrarModalDetalles"
-              class="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium transition-all">
-        Cerrar
-      </button>
+      <!-- Información -->
+      <div>
+        <!-- Marca y Título -->
+        <div class="mb-6">
+          <p class="text-sm text-gray-500 font-medium uppercase mb-2">${producto.moneda}</p>
+          <h1 class="text-3xl font-bold text-gray-900 mb-3">${producto.nombre}</h1>
+          <p class="text-gray-600">${producto.descripcion || 'Sin descripción disponible'}</p>
+        </div>
+
+        <!-- Precio destacado -->
+        <div class="bg-gradient-to-r from-red-50 to-orange-50 rounded-xl p-4 mb-6">
+          <p class="text-sm text-gray-600 mb-2">Precio</p>
+          <p class="text-4xl font-bold text-red-600">$${(producto.precio_centavos / 100).toLocaleString('es-CO')}</p>
+        </div>
+
+        <!-- Grid de información -->
+        <div class="grid grid-cols-2 gap-4 mb-6">
+          <div class="bg-blue-50 rounded-lg p-4">
+            <p class="text-xs text-gray-600 font-semibold uppercase mb-1">SKU</p>
+            <p class="text-lg font-bold text-gray-900">${producto.sku || 'N/A'}</p>
+          </div>
+          <div class="bg-purple-50 rounded-lg p-4">
+            <p class="text-xs text-gray-600 font-semibold uppercase mb-1">Stock</p>
+            <p class="text-lg font-bold text-green-600">${producto.stock} units</p>
+          </div>
+        </div>
+
+        <!-- Información de stock -->
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <p class="text-sm font-semibold text-blue-900 mb-3">📦 Información de Stock</p>
+          <div class="space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-700">Estado:</span>
+              <span class="px-3 py-1 bg-green-200 text-green-800 rounded-full text-xs font-semibold">
+                ${producto.activo ? '✓ Activo' : '✗ Inactivo'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Botones de acción -->
+        <div class="flex gap-3">
+          <button onclick="cerrarModalDetalles()" class="flex-1 px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition">
+            Cerrar
+          </button>
+          <button id="btnEditarModal" class="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold rounded-lg hover:shadow-lg transition flex items-center justify-center gap-2">
+            <i class="fas fa-edit mr-2"></i> Editar
+          </button>
+        </div>
+      </div>
     </div>
   `;
 
   modalContent.innerHTML = html;
   modal.style.display = "flex";
 
-  // Evento para cerrar modal
-  document.getElementById("btnCerrarModalDetalles").addEventListener("click", () => {
-    modal.style.display = "none";
+  // Botón editar
+  document.getElementById("btnEditarModal").addEventListener('click', () => {
+    const editarUrl = EP.vistaEditarTemplate.replace(/\/0\/editar$/, `/${producto.id}/editar`);
+    window.location.href = editarUrl;
   });
 }
 
