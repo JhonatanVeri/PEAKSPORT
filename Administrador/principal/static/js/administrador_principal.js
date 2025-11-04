@@ -748,24 +748,35 @@ const btnExport = document.getElementById('btnExport');
 btnExport.addEventListener('click', exportarPDF);
 
 /* ===========================
-   Modal Detalles
+   Modal Detalles - CON FIX DE IMÁGENES
 =========================== */
 
 function mostrarModalDetalles(producto) {
   const modal = document.getElementById("modalDetalles");
   const modalContent = modal.querySelector(".modal-content");
 
+  // ✅ FUNCIÓN PARA CONSTRUIR URL DE IMAGEN CORRECTAMENTE
+  const getImageUrl = (url) => {
+    if (!url) return null;
+    // Si ya es una URL completa (empieza con http o /), usarla tal cual
+    if (url.startsWith('http') || url.startsWith('/')) return url;
+    // Si no, construir la ruta desde static/uploads
+    return `/static/uploads/${url}`;
+  };
+
   const imagenProducto = producto.imagenes && producto.imagenes.length > 0
     ? producto.imagenes.find(img => img.es_portada) || producto.imagenes[0]
     : (producto.image ? { url: producto.image } : null);
+
+  const imagenUrl = imagenProducto ? getImageUrl(imagenProducto.url) : null;
 
   const html = `
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
       <!-- Imagen -->
       <div>
         <div class="relative rounded-xl overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 aspect-square mb-4">
-          ${imagenProducto
-            ? `<img src="${imagenProducto.url}" alt="${imagenProducto.alt || producto.nombre}" class="w-full h-full object-cover">`
+          ${imagenUrl
+            ? `<img src="${imagenUrl}" alt="${imagenProducto?.alt || producto.nombre}" class="w-full h-full object-cover" onerror="console.error('Error cargando imagen:', this.src); this.style.display='none'; this.parentElement.innerHTML='<div class=\"w-full h-full flex items-center justify-center\"><i class=\"fas fa-box text-gray-400 text-6xl\"></i></div>';">`
             : `<div class="w-full h-full flex items-center justify-center"><i class="fas fa-box text-gray-400 text-6xl"></i></div>`
           }
           <div class="absolute top-3 right-3 flex gap-2">
@@ -845,6 +856,10 @@ function mostrarModalDetalles(producto) {
     const editarUrl = EP.vistaEditarTemplate.replace(/\/0\/editar$/, `/${producto.id}/editar`);
     window.location.href = editarUrl;
   });
+
+  // ✅ DEBUGGING: Mostrar URL de imagen en consola
+  console.log('Producto:', producto);
+  console.log('Imagen URL:', imagenUrl);
 }
 
 
