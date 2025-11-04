@@ -263,7 +263,7 @@
   <script>
   window.__ADMIN_ENDPOINTS__ = {
     apiListar: "{{ url_for('administrador_principal.api_listar_productos') }}",
-    apiEliminarTemplate: "{{ url_for('administrador_principal.vista_eliminar_producto', producto_id=0) }}",
+    apiEliminarTemplate: "{{ url_for('administrador_principal.api_eliminar_producto', producto_id=0) }}",
     vistaEditarTemplate: "{{ url_for('administrador_principal.vista_editar_producto', producto_id=0) }}",
     vistaEliminarTemplate: "{{ url_for('administrador_principal.vista_eliminar_producto', producto_id=0) }}",
     vistaNuevo: "{{ url_for('administrador_principal.vista_nuevo_producto') }}"

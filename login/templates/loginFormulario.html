@@ -13,7 +13,24 @@
   <!-- Estilos propios (sirve desde el blueprint 'login') -->
   <link rel="stylesheet" href="{{ url_for('login.static', filename='css/loginFormulario.css') }}">
 </head>
-<body class="login-bg">
+<body class="relative">
+  <!-- Fondo con degradado de rojo vino a negro -->
+  <div class="fixed inset-0 -z-20 bg-gradient-to-br from-red-700 via-red-900 to-black"></div>
+  
+  <!-- Patrón de malla decorativa en el fondo -->
+  <div class="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+    <svg class="absolute w-full h-full" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="diamond-pattern" x="0" y="0" width="50" height="50" patternUnits="userSpaceOnUse">
+          <path d="M25 0 L50 25 L25 50 L0 25 Z" 
+                fill="none" 
+                stroke="rgba(255, 255, 255, 0.1)" 
+                stroke-width="1"/>
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#diamond-pattern)"/>
+    </svg>
+  </div>
 
   <!-- HEADER -->
   <header class="absolute top-0 w-full z-50">
