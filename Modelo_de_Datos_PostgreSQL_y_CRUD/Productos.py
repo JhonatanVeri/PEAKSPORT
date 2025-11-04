@@ -3,6 +3,7 @@
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy import CheckConstraint, func
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import joinedload
 
 from Modelo_de_Datos_PostgreSQL_y_CRUD.conexion_postgres import db
 from Log_PeakSport import log_info, log_error, log_warning
@@ -129,6 +130,41 @@ def obtener_producto_por_slug(slug: str) -> Optional[Producto]:
 
 
 def listar_productos(
+    filtros: Optional[Dict[str, Any]] = None,
+    page: int = 1,
+    per_page: int = 20,
+) -> Tuple[List[Producto], int]:
+    try:
+        filtros = filtros or {}
+
+        query = Producto.query.options(joinedload(Producto.imagenes))  # 👈 clave
+
+        if 'activo' in filtros:
+            query = query.filter(Producto.activo == filtros['activo'])
+        if 'usuario_id' in filtros:
+            query = query.filter(Producto.usuario_id == filtros['usuario_id'])
+        if 'q' in filtros and filtros['q']:
+            q = f"%{filtros['q']}%"
+            query = query.filter(Producto.nombre.ilike(q))
+        if 'categoria_id' in filtros and filtros['categoria_id']:
+            query = query.join(Producto.categorias).filter(Categoria.id == filtros['categoria_id'])
+
+        total = query.count()
+        items = (
+            query.order_by(Producto.created_at.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+            .all()
+        )
+
+        log_info(f"listar_productos: page={page}, per_page={per_page}, total={total}")
+        return items, total
+    except SQLAlchemyError as e:
+        log_error(f"Error en listar_productos: {str(e)}")
+        return [], 0
+
+
+def listar_productos2(
     filtros: Optional[Dict[str, Any]] = None,
     page: int = 1,
     per_page: int = 20,

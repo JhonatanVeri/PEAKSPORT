@@ -27,7 +27,7 @@
   <link rel="icon" href="{{ url_for('static', filename='img/logo_PeakSport.ico') }}" type="image/x-icon">
 </head>
 <body class="font-inter">
-
+  
   <!-- Modal Overlay -->
   <div class="modal-overlay">
     
@@ -53,11 +53,15 @@
         <div class="flex items-center space-x-4">
           <!-- Product Image -->
           <div class="w-16 h-16 bg-gradient-danger rounded-lg flex items-center justify-center flex-shrink-0">
-            {% if producto.imagenes and producto.imagenes[0] %}
-              <img src="{{ producto.imagenes[0].url }}" alt="{{ producto.nombre }}" class="w-full h-full object-cover rounded-lg">
+            {% if producto.imagen_portada %}
+              <img src="{{ producto.imagen_portada }}" 
+                  alt="{{ producto.nombre }}" 
+                  class="w-full h-full object-cover rounded-lg">
             {% else %}
               <i class="fas fa-box text-white text-2xl"></i>
             {% endif %}
+
+            
           </div>
 
           <!-- Product Details -->
@@ -110,6 +114,7 @@
     </div>
   </div>
 
+
   <!-- Endpoints -->
   <script>
     window.__PRODUCTO_ID__ = {{ producto.id }};
@@ -122,4 +127,5 @@
   <!-- JS específico -->
   <script src="{{ url_for('administrador_principal.static', filename='/js/administrador_principal_eliminar.js') }}"></script>
 </body>
+
 </html>

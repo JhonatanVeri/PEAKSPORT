@@ -206,10 +206,11 @@ def registrar_rutas(bp):
             imagen_portada = None
             for img in p.imagenes:
                 if img.es_portada:
-                    imagen_portada = img.url
+                    imagen_portada = img.to_dict()["url"]
                     break
             if not imagen_portada and p.imagenes:
-                imagen_portada = p.imagenes[0].url
+                imagen_portada = p.imagenes[0].to_dict()["url"]
+
 
             data.append({
                 "id": p.id,

@@ -211,7 +211,7 @@ function manejarArchivos(e) {
 }
 
 /* ===========================
-   Crear Producto (CORREGIDO)
+   Crear Producto
 =========================== */
 
 async function crearProducto() {
@@ -256,7 +256,7 @@ async function crearProducto() {
       
       for (const categoriaId of FORM.categorias) {
         try {
-          const respCat = await fetch(`/api/admin/productos/${productoId}/categorias`, {
+          const respCat = await fetch(`/administrador/principal/api/admin/productos/${productoId}/categorias`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ categoria_id: categoriaId })
@@ -272,34 +272,45 @@ async function crearProducto() {
       console.log('✅ Categorías asociadas');
     }
 
-    // 4. Subir imágenes (SI HAY IMÁGENES)
+    // 4. Subir imágenes (SI HAY IMÁGENES) - ✅ CORREGIDO
     if (imagenesCargadas.length > 0) {
       btnCrear.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Subiendo imágenes...';
       
       const formData = new FormData();
       
-      // Agregar todos los archivos
-      imagenesCargadas.forEach((img, idx) => {
+      // Agregar archivos y sus alts
+      imagenesCargadas.forEach((img) => {
         formData.append('files', img.file);
-        formData.append('alt', img.file.name.split('.')[0]); // Usar nombre de archivo como alt
+        // Enviar alt para cada archivo (backend espera getlist('alt'))
+        const altText = img.file.name.split('.')[0];
+        formData.append('alt', altText);
       });
       
-      // Marcar cuál es la portada
+      // Marcar la portada por índice
       const portadaIndex = imagenesCargadas.findIndex(img => img.portada);
       if (portadaIndex !== -1) {
-        formData.append('portada_index', portadaIndex);
+        formData.append('portada_index', portadaIndex.toString());
       }
 
-      const respImg = await fetch(`/api/admin/productos/${productoId}/imagenes`, {
+      console.log('📤 Subiendo', imagenesCargadas.length, 'imágenes al producto:', productoId);
+      console.log('⭐ Índice de portada:', portadaIndex);
+      console.log('📋 FormData preparado con files y alts');
+
+      // ✅ USAR LA RUTA CORRECTA CON EL PREFIJO DEL BLUEPRINT
+      const respImg = await fetch(`/administrador/principal/api/admin/productos/${productoId}/imagenes`, {
         method: 'POST',
         body: formData
       });
 
+      const dataImg = await respImg.json();
+      
       if (!respImg.ok) {
-        console.warn('⚠️ No se pudieron subir las imágenes');
-      } else {
-        console.log('✅ Imágenes subidas');
+        console.error('❌ Error subiendo imágenes:', dataImg);
+        console.error('📄 Respuesta del servidor:', dataImg);
+        throw new Error(dataImg.error || 'No se pudieron subir las imágenes');
       }
+      
+      console.log('✅ Imágenes subidas correctamente:', dataImg);
     }
 
     // 5. Todo exitoso
@@ -327,7 +338,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Inputs
   document.getElementById('inpNombre').addEventListener('input', (e) => {
     FORM.nombre = e.target.value.trim();
-    // Generar slug automático
     const slugGenerado = slugify(FORM.nombre);
     document.getElementById('inpSlug').value = slugGenerado;
     FORM.slug = slugGenerado;

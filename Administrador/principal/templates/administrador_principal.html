@@ -260,15 +260,30 @@
   </div>
 
   <!-- Endpoints -->
-  <script>
-  window.__ADMIN_ENDPOINTS__ = {
+  <!-- Endpoints (siempre antes del JS principal) -->
+<script>
+  window.ADMIN_ENDPOINTS = {
     apiListar: "{{ url_for('administrador_principal.api_listar_productos') }}",
     apiEliminarTemplate: "{{ url_for('administrador_principal.api_eliminar_producto', producto_id=0) }}",
     vistaEditarTemplate: "{{ url_for('administrador_principal.vista_editar_producto', producto_id=0) }}",
     vistaEliminarTemplate: "{{ url_for('administrador_principal.vista_eliminar_producto', producto_id=0) }}",
     vistaNuevo: "{{ url_for('administrador_principal.vista_nuevo_producto') }}"
   };
-  </script>
+</script>
+
+<!-- Fallback JSON (opcional, pero recomendado) -->
+<script id="admin-endpoints-json" type="application/json">
+  {
+    "apiListar": "{{ url_for('administrador_principal.api_listar_productos') }}",
+    "apiEliminarTemplate": "{{ url_for('administrador_principal.api_eliminar_producto', producto_id=0) }}",
+    "vistaEditarTemplate": "{{ url_for('administrador_principal.vista_editar_producto', producto_id=0) }}",
+    "vistaEliminarTemplate": "{{ url_for('administrador_principal.vista_eliminar_producto', producto_id=0) }}",
+    "vistaNuevo": "{{ url_for('administrador_principal.vista_nuevo_producto') }}"
+  }
+</script>
+
+<!-- Tu JS principal (después de endpoints) -->
+<script src="{{ url_for('administrador_principal.static', filename='js/administrador_principal.js') }}" defer></script>
   
   <!-- JS propio -->
   <script src="{{ url_for('administrador_principal.static', filename='/js/administrador_principal.js') }}"></script>
