@@ -236,7 +236,7 @@ def registrar_rutas(bp):
         slug = (payload.get("slug") or _slugify(nombre)).strip()
         descripcion = payload.get("descripcion")
         moneda = (payload.get("moneda") or "COP").strip().upper()
-        sku = payload.get("sku", "").strip() or None
+        sku = (payload.get("sku") or "").strip() or None
         activo = payload.get("activo")
         
         if isinstance(activo, str):
