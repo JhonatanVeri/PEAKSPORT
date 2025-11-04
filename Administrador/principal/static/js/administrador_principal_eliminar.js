@@ -55,8 +55,9 @@ btnConfirmar.addEventListener('click', async () => {
   btnConfirmar.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Eliminando...';
 
   try {
+    // ✅ CORRECCIÓN: Cambiar método a DELETE
     const response = await fetch(EP.apiEliminar, {
-      method: 'POST',
+      method: 'DELETE',
       headers: {
         'Content-Type': 'application/json'
       }

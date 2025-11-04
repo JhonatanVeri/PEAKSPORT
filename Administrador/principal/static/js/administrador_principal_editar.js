@@ -135,7 +135,7 @@ btnGuardar.addEventListener('click', async () => {
 });
 
 /* ===========================
-   Categorías (toggle inmediato)
+   Categorías (toggle inmediato) - ÚNICO LISTENER
 =========================== */
 listaCategorias.addEventListener('change', async (e) => {
   const target = e.target;
@@ -143,13 +143,19 @@ listaCategorias.addEventListener('change', async (e) => {
   const categoriaId = parseInt(target.value, 10);
   try {
     if (target.checked) {
-      const body = new URLSearchParams();
-      body.set('categoria_id', categoriaId);
-      const r = await fetch(EP.apiAgregarCategoriaBase, { method: 'POST', body });
+      // ✅ CORRECTO: Usar JSON en lugar de URLSearchParams
+      const r = await fetch(EP.apiAgregarCategoriaBase, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoria_id: categoriaId })
+      });
       const dj = await r.json();
-      if (!r.ok || !dj.ok) throw new Error(dj.error || 'No se pudo asociar');
+      if (!r.ok || !dj.ok) {
+        throw new Error(dj.error || 'No se pudo asociar');
+      }
       showNotification('Categoría', 'Asociada', 'success');
     } else {
+      // DELETE ya está bien
       const url = `${EP.apiQuitarCategoriaBase}${categoriaId}`;
       const r = await fetch(url, { method: 'DELETE' });
       const dj = await r.json();
@@ -159,7 +165,6 @@ listaCategorias.addEventListener('change', async (e) => {
   } catch (e2) {
     console.error(e2);
     showNotification('Error', e2.message, 'error');
-    // revertir toggle visual si falló
     target.checked = !target.checked;
   }
 });
@@ -248,7 +253,6 @@ async function actualizarImagen(imagenId, campos) {
 }
 
 async function moverOrden(imagenId, delta) {
-  // Busca la imagen y cambia orden localmente
   const idx = IMAGENES.findIndex(i => i.id === imagenId);
   if (idx === -1) return;
   const current = IMAGENES[idx];
@@ -263,7 +267,6 @@ async function moverOrden(imagenId, delta) {
     });
     const dj = await r.json();
     if (!r.ok || !dj.ok) throw new Error(dj.error || 'No se pudo reordenar');
-    // refrescar desde back para mantener orden coherente
     await cargarImagenes();
   } catch (e) {
     console.error(e);
@@ -289,7 +292,6 @@ async function marcarPortada(imagenId) {
 }
 
 async function eliminarImagen(imagenId) {
-  // Obtener URL de la imagen para mostrar en el modal
   const imagen = IMAGENES.find(i => i.id === imagenId);
   if (!imagen) {
     showNotification('Error', 'Imagen no encontrada', 'error');
@@ -304,7 +306,6 @@ inpFiles.addEventListener('change', async (e) => {
   if (!files.length) return;
   const form = new FormData();
   files.forEach(f => form.append('files', f));
-  // no forzamos portada_index aquí; si no hay portada previa, la lógica del back ya lo resuelve
   try {
     const r = await fetch(EP.apiSubirImagenes, { method: 'POST', body: form });
     const dj = await r.json();
@@ -340,7 +341,6 @@ function mostrarModalEliminarImagen(imagenId, imagenUrl) {
   
   content.innerHTML = `
     <div class="p-6">
-      <!-- Header -->
       <div class="text-center mb-6">
         <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 pulse-danger">
           <i class="fas fa-trash text-red-600 text-2xl"></i>
@@ -349,7 +349,6 @@ function mostrarModalEliminarImagen(imagenId, imagenUrl) {
         <p class="text-gray-600">¿Estás seguro de que quieres eliminar esta imagen?</p>
       </div>
 
-      <!-- Preview de la imagen -->
       <div class="bg-gray-50 rounded-xl p-4 mb-6">
         <div class="flex items-center space-x-4">
           <div class="w-16 h-16 bg-gradient-to-br from-red-600 to-black rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
@@ -362,7 +361,6 @@ function mostrarModalEliminarImagen(imagenId, imagenUrl) {
         </div>
       </div>
 
-      <!-- Advertencia -->
       <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
         <div class="flex items-start">
           <i class="fas fa-exclamation-triangle text-red-500 mr-3 mt-0.5"></i>
@@ -373,7 +371,6 @@ function mostrarModalEliminarImagen(imagenId, imagenUrl) {
         </div>
       </div>
 
-      <!-- Botones -->
       <div class="flex space-x-3">
         <button onclick="cerrarModalEliminarImagenEditar()" 
                 class="flex-1 px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all font-medium">
@@ -390,14 +387,12 @@ function mostrarModalEliminarImagen(imagenId, imagenUrl) {
   modal.classList.remove('hidden');
   modal.style.display = 'flex';
 
-  // Cerrar al hacer clic fuera
   modal.addEventListener('click', (e) => {
     if (e.target === modal) {
       cerrarModalEliminarImagenEditar();
     }
   });
 
-  // Cerrar con ESC
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && modal.style.display === 'flex') {
       cerrarModalEliminarImagenEditar();

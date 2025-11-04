@@ -2,33 +2,6 @@
 """
 Controlador de Administrador (Principal)
 CRUD de Productos, gestión de Imágenes y asociación con Categorías.
-
-Depende de:
-- Modelo_de_Datos_PostgreSQL_y_CRUD.Productos (Producto + CRUD)
-- Modelo_de_Datos_PostgreSQL_y_CRUD.Categorias (Categoria + CRUD)
-- Producto_Imagenes.ProductoImagen + CRUD
-- Modelo_de_Datos_PostgreSQL_y_CRUD.associations (producto_categorias)
-- Log_PeakSport (log_info, log_warning, log_error, log_critical)
-
-Rutas principales (HTML):
-- GET  /admin/productos                -> listado con paginación/filtros
-- GET  /admin/productos/nuevo          -> formulario crear
-- GET  /admin/productos/<id>/editar    -> formulario editar
-
-Rutas API (JSON):
-- GET    /api/admin/productos
-- POST   /api/admin/productos
-- GET    /api/admin/productos/<id>
-- PATCH  /api/admin/productos/<id>
-- DELETE /api/admin/productos/<id>
-
-- POST   /api/admin/productos/<id>/categorias        (body: {categoria_id})
-- DELETE /api/admin/productos/<id>/categorias/<cid>
-
-- GET    /api/admin/productos/<id>/imagenes
-- POST   /api/admin/productos/<id>/imagenes          (multipart: files[] ; alt[] ; portada_index)
-- PATCH  /api/admin/imagenes/<imagen_id>             (body: {alt, orden, es_portada})
-- DELETE /api/admin/imagenes/<imagen_id>
 """
 
 import os
@@ -139,7 +112,6 @@ def registrar_rutas(bp):
         items, total = listar_productos(filtros=filtros, page=page, per_page=per_page)
         cats, _ = listar_categorias(padre_id=None, page=1, per_page=9999)
 
-        # ⬇️ vista principal SIN subcarpeta
         return render_template(
             "administrador_principal.html",
             productos=items,
@@ -150,17 +122,13 @@ def registrar_rutas(bp):
             activo=activo,
             categoria_id=categoria_id,
             categorias=cats,
-            
         )
-
 
     @bp.route("/admin/productos/nuevo", methods=["GET"])
     @requiere_admin
     def vista_nuevo_producto():
         cats, _ = listar_categorias(padre_id=None, page=1, per_page=9999)
-        # ⬇️ vista crear SIN subcarpeta
         return render_template("administrador_principal_crear.html", producto=None, categorias=cats, modo="crear")
-
 
     @bp.route("/admin/productos/<int:producto_id>/editar", methods=["GET"])
     @requiere_admin
@@ -171,9 +139,6 @@ def registrar_rutas(bp):
         cats, _ = listar_categorias(padre_id=None, page=1, per_page=9999)
         imgs = listar_imagenes_producto(producto_id)
 
-        # TIP: cuando hagas la vista de edición, crea un
-        # 'administrador_principal_editar.html' y ajústalo aquí.
-        # Por ahora puedes reutilizar la de crear en modo editar:
         return render_template(
             "administrador_principal_editar.html",
             producto=prod,
@@ -195,15 +160,14 @@ def registrar_rutas(bp):
             producto=prod
         )
     
-    @bp.route("/admin/productos/<int:producto_id>/eliminar", methods=["DELETE"])
+    # ✅ ÚNICA RUTA DELETE PARA API
+    @bp.route("/api/admin/productos/<int:producto_id>/eliminar", methods=["DELETE"])
     @requiere_admin
     def api_eliminar_producto(producto_id: int):
         """
         API: elimina el producto indicado (llamada desde fetch DELETE en el modal).
         """
         try:
-            from Modelo_de_Datos_PostgreSQL_y_CRUD.Productos import eliminar_producto
-
             ok = eliminar_producto(producto_id)
             if not ok:
                 return jsonify({
@@ -218,9 +182,8 @@ def registrar_rutas(bp):
             log_error(f"[admin] Error al eliminar producto {producto_id}: {e}")
             return jsonify({"ok": False, "error": "Error interno del servidor"}), 500
 
-
     # ---------- API CRUD PRODUCTOS ----------
-    @bp.route("/api/admin/productos", methods=["GET","POST"])
+    @bp.route("/api/admin/productos", methods=["GET"])
     @requiere_admin
     def api_listar_productos():
         page = int(request.args.get("page", 1))
@@ -296,7 +259,7 @@ def registrar_rutas(bp):
         except Exception:
             return jsonify({"ok": False, "error": "stock inválido"}), 400
 
-        usuario_id = None  # No es obligatorio
+        usuario_id = None
 
         prod = crear_producto(
             nombre=nombre,
@@ -451,7 +414,6 @@ def registrar_rutas(bp):
         except Exception:
             portada_index = None
 
-        # Carpeta: static/uploads/productos/<producto_id>/
         base = _uploads_root()
         _ensure_dir(base)
         dest_dir = os.path.join(base, str(producto_id))
@@ -466,7 +428,6 @@ def registrar_rutas(bp):
                 log_warning(f"Archivo inválido omitido: {filename}")
                 continue
 
-            # Evita colisiones: añade sufijo si existe
             name, ext = os.path.splitext(filename)
             safe_name = filename
             c = 1
@@ -477,7 +438,6 @@ def registrar_rutas(bp):
             save_path = os.path.join(dest_dir, safe_name)
             file.save(save_path)
 
-            # URL pública relativa a /static
             rel_path = os.path.relpath(save_path, current_app.static_folder).replace("\\", "/")
             url_publica = f"/static/{rel_path}"
 
@@ -493,7 +453,6 @@ def registrar_rutas(bp):
                 if es_portada:
                     portada_set = True
 
-        # Si no se marcó ninguna como portada y no existe portada previa, intenta marcar la primera
         if not portada_set:
             existentes = listar_imagenes_producto(producto_id)
             if existentes and not any(i.es_portada for i in existentes):
@@ -519,29 +478,24 @@ def registrar_rutas(bp):
                 v = v.lower() in {"1", "true", "t", "yes", "on"}
             campos["es_portada"] = bool(v)
 
-        # Si solo quieren reordenar, usa helper dedicado para claridad
         if "orden" in campos and len(campos) == 1:
             img = reordenar_imagen(imagen_id, campos["orden"])
             if not img:
                 return jsonify({"ok": False, "error": "No fue posible reordenar"}), 400
             return jsonify({"ok": True})
 
-        # Para cambios generales (incluida portada)
         img = actualizar_imagen_db(imagen_id, **campos)
         if not img:
             return jsonify({"ok": False, "error": "No fue posible actualizar imagen"}), 400
-        # Si marcaron portada explícitamente y la imagen pertenece a un producto, ya se garantiza unicidad
         return jsonify({"ok": True})
 
     @bp.route("/api/admin/imagenes/<int:imagen_id>", methods=["DELETE"])
     @requiere_admin
     def api_eliminar_imagen(imagen_id: int):
-        # Opcional: borrar también el archivo físico si es bajo /static/uploads
         img = ProductoImagen.query.get(imagen_id)
         if not img:
             return jsonify({"ok": False, "error": "Imagen no encontrada"}), 404
 
-        # Intenta borrar archivo físico si cuelga de /static
         try:
             if img.url and img.url.startswith("/static/"):
                 abs_path = os.path.join(current_app.root_path, img.url.lstrip("/"))
@@ -569,7 +523,6 @@ def registrar_rutas(bp):
                                 categorias=cats, total=total, page=page, per_page=per_page)
         except Exception as e:
             log_error(f"vista_categorias ERROR: {e}")
-            # No devuelvas HTML aquí, pero como es la vista puedes renderizar 500 custom si quieres
             return abort(500)
 
     # ---------- API CATEGORÍAS ----------
@@ -594,7 +547,7 @@ def registrar_rutas(bp):
     @bp.route("/api/admin/categorias", methods=["POST"])
     @requiere_admin
     def api_crear_categoria():
-        from Modelo_de_Datos_PostgreSQL_y_CRUD.Categorias import crear_categoria  # <- importa aquí o arriba
+        from Modelo_de_Datos_PostgreSQL_y_CRUD.Categorias import crear_categoria
         try:
             payload = request.get_json(silent=True) or request.form.to_dict()
             nombre = (payload.get("nombre") or "").strip()
