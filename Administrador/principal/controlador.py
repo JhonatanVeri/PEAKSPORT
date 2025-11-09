@@ -206,10 +206,11 @@ def registrar_rutas(bp):
             imagen_portada = None
             for img in p.imagenes:
                 if img.es_portada:
-                    imagen_portada = img.url
+                    imagen_portada = img.to_dict()["url"]
                     break
             if not imagen_portada and p.imagenes:
-                imagen_portada = p.imagenes[0].url
+                imagen_portada = p.imagenes[0].to_dict()["url"]
+
 
             data.append({
                 "id": p.id,
@@ -289,7 +290,7 @@ def registrar_rutas(bp):
             if img.es_portada:
                 portada = {
                     "id": img.id,
-                    "url": img.url,
+                    "url": img.to_dict()["url"],
                     "alt": img.alt,
                     "orden": img.orden,
                     "es_portada": img.es_portada
@@ -447,7 +448,7 @@ def registrar_rutas(bp):
             img = agregar_imagen(producto_id=producto_id, url=url_publica, alt=alt_txt, orden=0, es_portada=es_portada)
             if img:
                 creadas.append({
-                    "id": img.id, "url": img.url, "alt": img.alt,
+                    "id": img.id, "url": img.to_dict()["url"], "alt": img.alt,
                     "orden": img.orden, "es_portada": img.es_portada
                 })
                 if es_portada:

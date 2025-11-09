@@ -7,9 +7,9 @@ const STATE = {
   per_page: 20,
   total: 0,
   q: '',
-  padre_id: '',  // filtro de raíz o por padre (si lo usas)
+  padre_id: '',
   orden: 'nombre',
-  editId: null,  // para modal en modo edición
+  editId: null,
 };
 
 /* ===========================
@@ -71,56 +71,114 @@ const txtDescripcion = document.getElementById('txtDescripcion');
 const selPadre = document.getElementById('selPadre');
 
 /* ===========================
-   API
+   API con mejor logging
 =========================== */
 async function apiListarCategorias(params = {}) {
-  const usp = new URLSearchParams();
-  if (STATE.padre_id !== '') usp.set('padre_id', STATE.padre_id);
-  usp.set('page', STATE.page);
-  usp.set('per_page', STATE.per_page);
-  // El endpoint no soporta q por defecto; puedes filtrar client-side
-  const url = `${EP.apiListarCategorias}?${usp.toString()}`;
-  const r = await fetch(url);
-  if (!r.ok) throw new Error('No se pudo listar categorías');
-  return r.json();
+  try {
+    const usp = new URLSearchParams();
+    if (STATE.padre_id !== '') usp.set('padre_id', STATE.padre_id);
+    usp.set('page', STATE.page);
+    usp.set('per_page', STATE.per_page);
+    const url = `${EP.apiListarCategorias}?${usp.toString()}`;
+    
+    console.log('📤 GET:', url);
+    const r = await fetch(url);
+    
+    if (!r.ok) {
+      const errData = await r.json().catch(() => ({}));
+      console.error('❌ Error listar:', r.status, errData);
+      throw new Error(errData.error || `Error ${r.status}`);
+    }
+    
+    const data = await r.json();
+    console.log('✅ Categorías cargadas:', data.items?.length || 0);
+    return data;
+  } catch (e) {
+    console.error('Error en apiListarCategorias:', e);
+    throw new Error(e.message || 'No se pudo listar categorías');
+  }
 }
 
 async function apiCrearCategoria(payload) {
-  const r = await fetch(EP.apiCrearCategoria, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-  const dj = await r.json();
-  if (!r.ok || !dj.ok) throw new Error(dj.error || 'No fue posible crear');
-  return dj;
+  try {
+    console.log('📤 POST /categorias:', JSON.stringify(payload, null, 2));
+    
+    const r = await fetch(EP.apiCrearCategoria, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const dj = await r.json();
+    console.log('📥 Response:', dj);
+    
+    if (!r.ok || !dj.ok) {
+      console.error('❌ Error crear:', r.status, dj);
+      throw new Error(dj.error || `Error ${r.status}`);
+    }
+    
+    console.log('✅ Categoría creada:', dj.categoria?.id);
+    return dj;
+  } catch (e) {
+    console.error('Error en apiCrearCategoria:', e);
+    throw new Error(e.message || 'No fue posible crear la categoría');
+  }
 }
 
 async function apiActualizarCategoria(id, payload) {
-  const url = EP.apiActualizarTemplate.replace(/\/0$/, `/${id}`);
-  const r = await fetch(url, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-  const dj = await r.json();
-  if (!r.ok || !dj.ok) throw new Error(dj.error || 'No fue posible actualizar');
-  return dj;
+  try {
+    const url = EP.apiActualizarTemplate.replace(/\/0$/, `/${id}`);
+    console.log('📤 PATCH:', url, JSON.stringify(payload, null, 2));
+    
+    const r = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const dj = await r.json();
+    console.log('📥 Response:', dj);
+    
+    if (!r.ok || !dj.ok) {
+      console.error('❌ Error actualizar:', r.status, dj);
+      throw new Error(dj.error || `Error ${r.status}`);
+    }
+    
+    console.log('✅ Categoría actualizada:', id);
+    return dj;
+  } catch (e) {
+    console.error('Error en apiActualizarCategoria:', e);
+    throw new Error(e.message || 'No fue posible actualizar la categoría');
+  }
 }
 
 async function apiEliminarCategoria(id) {
-  const url = EP.apiEliminarTemplate.replace(/\/0$/, `/${id}`);
-  const r = await fetch(url, { method: 'DELETE' });
-  const dj = await r.json();
-  if (!r.ok || !dj.ok) throw new Error(dj.error || 'No fue posible eliminar');
-  return dj;
+  try {
+    const url = EP.apiEliminarTemplate.replace(/\/0$/, `/${id}`);
+    console.log('📤 DELETE:', url);
+    
+    const r = await fetch(url, { method: 'DELETE' });
+    const dj = await r.json();
+    
+    console.log('📥 Response:', dj);
+    
+    if (!r.ok || !dj.ok) {
+      console.error('❌ Error eliminar:', r.status, dj);
+      throw new Error(dj.error || `Error ${r.status}`);
+    }
+    
+    console.log('✅ Categoría eliminada:', id);
+    return dj;
+  } catch (e) {
+    console.error('Error en apiEliminarCategoria:', e);
+    throw new Error(e.message || 'No fue posible eliminar la categoría');
+  }
 }
 
 /* ===========================
-   Render
+   Render Table, Resumen, Paginación
 =========================== */
 function renderTable(items) {
-  // Filtro q y orden client-side
   let rows = [...items];
 
   const q = (STATE.q || '').toLowerCase();
@@ -133,8 +191,6 @@ function renderTable(items) {
 
   if (STATE.orden === 'nombre') {
     rows.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
-  } else if (STATE.orden === 'fecha') {
-    // si el API no devuelve fechas, no se ordena realmente; dejamos por defecto
   }
 
   tbody.innerHTML = rows.map(c => `
@@ -202,7 +258,7 @@ function renderPaginacion(total) {
 }
 
 /* ===========================
-   Modal
+   Modal Crear/Editar
 =========================== */
 function openModal(editId = null, cat = null, listaPadres = []) {
   STATE.editId = editId;
@@ -211,7 +267,6 @@ function openModal(editId = null, cat = null, listaPadres = []) {
   inpSlug.value = cat?.slug || '';
   txtDescripcion.value = cat?.descripcion || '';
 
-  // Rellenar selects de padre (opción raíz + todas raíces disponibles)
   selPadre.innerHTML = `<option value="">(Sin padre) — raíz</option>` +
     listaPadres.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
   selPadre.value = cat?.padre_id || '';
@@ -225,39 +280,140 @@ function closeModal() {
 }
 
 /* ===========================
-   Bindings
+   Modal Eliminar Categoría
+=========================== */
+function mostrarModalEliminarCategoria(id, nombre) {
+  let modalEliminar = document.getElementById('modalEliminarCategoria');
+  
+  if (!modalEliminar) {
+    modalEliminar = document.createElement('div');
+    modalEliminar.id = 'modalEliminarCategoria';
+    document.body.appendChild(modalEliminar);
+  }
+
+  modalEliminar.className = 'fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] hidden items-center justify-center p-4';
+  modalEliminar.innerHTML = `
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 modal-content-eliminar animate-slideUp">
+      <div class="text-center mb-6">
+        <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 pulse-danger">
+          <i class="fas fa-trash text-red-600 text-2xl"></i>
+        </div>
+        <h2 class="text-2xl font-bold text-gray-900 mb-2">Eliminar categoría</h2>
+        <p class="text-gray-600">¿Estás seguro de que quieres eliminar esta categoría?</p>
+      </div>
+
+      <div class="bg-gray-50 rounded-xl p-4 mb-6">
+        <div class="flex items-center space-x-4">
+          <div class="w-16 h-16 bg-gradient-to-br from-red-500 to-red-600 rounded-lg flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-tag text-white text-2xl"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-semibold text-gray-900 truncate">${nombre}</h3>
+            <p class="text-sm text-gray-600 mt-1">ID: ${id}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+        <div class="flex items-start">
+          <i class="fas fa-exclamation-triangle text-red-500 mr-3 mt-0.5"></i>
+          <div class="text-sm">
+            <p class="text-red-800 font-medium">Esta acción no se puede deshacer</p>
+            <p class="text-red-700 mt-1">La categoría será eliminada permanentemente.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex space-x-3">
+        <button onclick="cerrarModalEliminarCategoria()" 
+                class="flex-1 px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all font-medium">
+          <i class="fas fa-times mr-2"></i> Cancelar
+        </button>
+        <button onclick="confirmarEliminarCategoriaFinal(${id})" 
+                class="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all font-medium shadow-lg btn-confirmar-eliminar">
+          <i class="fas fa-check mr-2"></i> Confirmar
+        </button>
+      </div>
+    </div>
+  `;
+
+  modalEliminar.classList.remove('hidden');
+  modalEliminar.style.display = 'flex';
+
+  modalEliminar.addEventListener('click', (e) => {
+    if (e.target === modalEliminar) cerrarModalEliminarCategoria();
+  });
+
+  const handleEsc = (e) => {
+    if (e.key === 'Escape' && modalEliminar.style.display === 'flex') {
+      cerrarModalEliminarCategoria();
+      document.removeEventListener('keydown', handleEsc);
+    }
+  };
+  document.addEventListener('keydown', handleEsc);
+}
+
+function cerrarModalEliminarCategoria() {
+  const modal = document.getElementById('modalEliminarCategoria');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+}
+
+async function confirmarEliminarCategoriaFinal(id) {
+  const modal = document.getElementById('modalEliminarCategoria');
+  const btnConfirmar = modal.querySelector('.btn-confirmar-eliminar');
+  
+  btnConfirmar.disabled = true;
+  btnConfirmar.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Eliminando...';
+
+  try {
+    await apiEliminarCategoria(id);
+    showNotification('Categoría eliminada', 'La categoría ha sido eliminada correctamente', 'success');
+    cerrarModalEliminarCategoria();
+    loadCategorias();
+  } catch (err) {
+    console.error(err);
+    showNotification('Error', err.message, 'error');
+    btnConfirmar.disabled = false;
+    btnConfirmar.innerHTML = '<i class="fas fa-check mr-2"></i> Confirmar';
+  }
+}
+
+window.mostrarModalEliminarCategoria = mostrarModalEliminarCategoria;
+window.cerrarModalEliminarCategoria = cerrarModalEliminarCategoria;
+window.confirmarEliminarCategoriaFinal = confirmarEliminarCategoriaFinal;
+
+/* ===========================
+   Bind Row Actions
 =========================== */
 function bindRowActions() {
   document.querySelectorAll('.btn-edit').forEach(b => {
     b.addEventListener('click', async (e) => {
       const id = e.currentTarget.getAttribute('data-id');
-      // Volvemos a cargar lista para poblar select padre
       const data = await apiListarCategorias();
       const items = data.items || [];
       const cat = items.find(x => String(x.id) === String(id));
-      const padres = items.filter(x => !x.padre_id && String(x.id) !== String(id)); // no permitas padre = sí mismo
+      const padres = items.filter(x => !x.padre_id && String(x.id) !== String(id));
       openModal(id, cat, padres);
     });
   });
 
   document.querySelectorAll('.btn-delete').forEach(b => {
-    b.addEventListener('click', async (e) => {
+    b.addEventListener('click', (e) => {
       const id = e.currentTarget.getAttribute('data-id');
-      if (!confirm(`¿Eliminar categoría ${id}?`)) return;
-      try {
-        await apiEliminarCategoria(id);
-        showNotification('Eliminada', `Categoría ${id} eliminada`, 'success');
-        loadCategorias();
-      } catch (err) {
-        console.error(err);
-        showNotification('Error', err.message, 'error');
-      }
+      const fila = e.currentTarget.closest('tr');
+      const nombre = fila.querySelector('td:nth-child(2)').textContent.trim();
+      mostrarModalEliminarCategoria(id, nombre);
     });
   });
 }
 
+/* ===========================
+   Init Handlers
+=========================== */
 function initHandlers() {
-  // Buscar (client-side)
   let t;
   txtSearch.addEventListener('input', () => {
     clearTimeout(t);
@@ -267,32 +423,26 @@ function initHandlers() {
     }, 250);
   });
 
-  // Orden
   selOrden.addEventListener('change', () => {
     STATE.orden = selOrden.value;
     loadCategorias();
   });
 
-  // Filtro de padre (opcional: si de verdad quieres paginar por padre)
   selPadreFiltro.addEventListener('change', () => {
     STATE.padre_id = selPadreFiltro.value;
     STATE.page = 1;
     loadCategorias();
   });
 
-  // Abrir modal crear
   btnNuevaCategoria.addEventListener('click', async () => {
-    // padres disponibles: raíces
     const data = await apiListarCategorias();
     const items = data.items || [];
     const padres = items.filter(x => !x.padre_id);
     openModal(null, null, padres);
   });
 
-  // cerrar modal
   [btnCerrarModal, btnCancelar].forEach(btn => btn.addEventListener('click', closeModal));
 
-  // autogenerar slug
   inpNombre.addEventListener('input', () => {
     if (!inpSlug.value || inpSlug.dataset.touched !== 'true') {
       inpSlug.value = slugify(inpNombre.value || '');
@@ -300,19 +450,21 @@ function initHandlers() {
   });
   inpSlug.addEventListener('input', () => { inpSlug.dataset.touched = 'true'; });
 
-  // Guardar
   btnGuardar.addEventListener('click', async () => {
     const nombre = (inpNombre.value || '').trim();
     if (!nombre) {
       showNotification('Faltan datos', 'El nombre es obligatorio', 'warning');
       return;
     }
+
     const payload = {
       nombre,
       slug: (inpSlug.value || slugify(nombre)).trim(),
       descripcion: (txtDescripcion.value || '').trim(),
       padre_id: selPadre.value ? Number(selPadre.value) : null
     };
+
+    console.log('🔍 Payload a enviar:', payload);
 
     try {
       if (STATE.editId) {
@@ -332,7 +484,7 @@ function initHandlers() {
 }
 
 /* ===========================
-   Load
+   Load Categorías
 =========================== */
 async function loadCategorias() {
   try {
@@ -340,7 +492,6 @@ async function loadCategorias() {
     const items = data.items || [];
     STATE.total = data.total || items.length;
 
-    // Poblar filtro de padre si está vacío
     if (!selPadreFiltro.dataset.init) {
       const roots = items.filter(x => !x.padre_id);
       selPadreFiltro.innerHTML = `<option value="">(Todas) Solo raíces</option>` +
@@ -348,11 +499,9 @@ async function loadCategorias() {
       selPadreFiltro.dataset.init = '1';
     }
 
-    // Si hay filtro de padre, muestra solo hijas de ese padre
     let visibles = items;
     if (STATE.padre_id) {
       visibles = items.filter(x => String(x.padre_id || '') === String(STATE.padre_id));
-      // Ajusta total para la vista filtrada
       STATE.total = visibles.length;
     }
 
@@ -369,6 +518,8 @@ async function loadCategorias() {
    Boot
 =========================== */
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('🚀 Iniciando categorías...');
+  console.log('📍 Endpoints:', EP);
   initHandlers();
   loadCategorias();
   showNotification('Listo', 'Gestión de categorías lista para usar', 'success');

@@ -8,6 +8,7 @@ Nota: Mantén en la DB el índice parcial único:
 """
 
 from typing import Optional, List
+from flask import url_for
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -29,6 +30,30 @@ class ProductoImagen(db.Model):
 
     def __repr__(self):
         return f"<ProductoImagen {self.id} prod={self.producto_id}>"
+
+##importante: este método genera la URL completa para uso en frontend
+
+    def to_dict(self):
+        """
+        Devuelve un diccionario con la URL absoluta de la imagen,
+        lista para usarse directamente en el frontend.
+        """
+        if self.url and not self.url.startswith("http"):
+            # Quita el prefijo '/static/' y genera la URL completa
+            clean_path = self.url.replace('/static/', '')
+            full_url = url_for('static', filename=clean_path, _external=True)
+        else:
+            full_url = self.url
+
+        return {
+            "id": self.id,
+            "producto_id": self.producto_id,
+            "url": full_url,
+            "alt": self.alt,
+            "orden": self.orden,
+            "es_portada": self.es_portada,
+            "created_at": self.created_at.isoformat() if self.created_at else None
+        }
 
 # ===================== CRUD =====================
 
